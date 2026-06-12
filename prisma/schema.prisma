@@ -68,15 +68,68 @@ model Tag {
 }
 
 model Media {
+  id          String   @id @default(cuid())
+  url         String
+  storageKey  String?
+  filename    String?
+  alt         String?
+  caption     String?
+  credit      String?
+  source      String?
+  mimeType    String?
+  size        Int?
+  width       Int?
+  height      Int?
+  format      String?
+  blurDataUrl String?
+  folderId    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  folder   MediaFolder?   @relation(fields: [folderId], references: [id])
+  variants MediaVariant[]
+  ai       MediaAI?
+
+  articles Article[] @relation("ArticleFeaturedImage")
+}
+model MediaFolder {
   id        String   @id @default(cuid())
-  url       String
-  alt       String?
-  caption   String?
-  type      String?
+  name      String
+  slug      String   @unique
+  parentId  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  articles Article[] @relation("ArticleFeaturedImage")
+  parent   MediaFolder?  @relation("MediaFolderHierarchy", fields: [parentId], references: [id])
+  children MediaFolder[] @relation("MediaFolderHierarchy")
+  media    Media[]
+}
+
+model MediaVariant {
+  id        String   @id @default(cuid())
+  mediaId   String
+  url       String
+  type      String
+  width     Int?
+  height    Int?
+  size      Int?
+  format    String?
+  createdAt DateTime @default(now())
+
+  media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+}
+
+model MediaAI {
+  id              String   @id @default(cuid())
+  mediaId          String   @unique
+  suggestedAlt     String?
+  suggestedCaption String?
+  detectedContext  String?
+  seoKeywords      String?
+  generatedBy      String?
+  createdAt        DateTime @default(now())
+
+  media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
 }
 
 model Article {
