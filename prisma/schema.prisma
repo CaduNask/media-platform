@@ -13,12 +13,52 @@ enum UserRole {
   AUTHOR
 }
 
-enum ArticleStatus {
+enum ContentType {
+  ARTICLE
+  LANDING_PAGE
+  SERVICE_PAGE
+  CASE_STUDY
+  GLOSSARY
+  FAQ
+  COMPARISON
+  PILLAR_PAGE
+  CATEGORY_HUB
+  CUSTOM
+}
+
+enum ContentStatus {
+  IDEA
   DRAFT
+  AI_ENRICHED
   REVIEW
+  APPROVED
   SCHEDULED
   PUBLISHED
   ARCHIVED
+}
+
+enum AIJobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model Site {
+  id        String   @id @default(cuid())
+  name      String
+  domain    String?  @unique
+  subdomain String?
+  locale    String   @default("pt-BR")
+  theme     String?
+  settings  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contents   Content[]
+  categories Category[]
+  tags       Tag[]
+  redirects  Redirect[]
 }
 
 model User {
@@ -30,8 +70,8 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  articles  Article[]
-  revisions Revision[]
+  contents  Content[]
+  revisions ContentRevision[]
 }
 
 model Author {
@@ -43,28 +83,202 @@ model Author {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  articles Article[]
+  contents Content[]
 }
 
 model Category {
   id          String   @id @default(cuid())
+  siteId      String
   name        String
-  slug        String   @unique
+  slug        String
   description String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  articles Article[]
+  site     Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  contents Content[]
+
+  @@unique([siteId, slug])
 }
 
 model Tag {
   id        String   @id @default(cuid())
+  siteId    String
   name      String
-  slug      String   @unique
+  slug      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  articles ArticleTag[]
+  site     Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  contents ContentTag[]
+
+  @@unique([siteId, slug])
+}
+
+model Content {
+  id        String        @id @default(cuid())
+  siteId    String
+  type      ContentType
+  status    ContentStatus @default(DRAFT)
+
+  title       String
+  slug        String
+  excerpt     String?
+  content     String?
+  readingTime Int?
+
+  canonicalUrl String?
+  publishedAt  DateTime?
+  scheduledAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  parentId String?
+  parent   Content?  @relation("ContentHierarchy", fields: [parentId], references: [id])
+  children Content[] @relation("ContentHierarchy")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  authorId String?
+  author   Author? @relation(fields: [authorId], references: [id])
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+
+  createdById String?
+  createdBy   User? @relation(fields: [createdById], references: [id])
+
+  featuredImageId String?
+  featuredImage   Media? @relation("ContentFeaturedImage", fields: [featuredImageId], references: [id])
+
+  tags       ContentTag[]
+  seo        ContentSEO?
+  brief      ContentBrief?
+  revisions  ContentRevision[]
+  analytics  ContentAnalytics?
+  calendar   EditorialCalendar?
+  aiJobs     AIJob[]
+  mediaLinks ContentMedia[]
+
+  @@unique([siteId, slug])
+}
+
+model ContentTag {
+  contentId String
+  tagId     String
+
+  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([contentId, tagId])
+}
+
+model ContentMedia {
+  contentId String
+  mediaId   String
+  role      String?
+  sortOrder Int     @default(0)
+
+  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  media   Media   @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@id([contentId, mediaId])
+}
+
+model ContentSEO {
+  id          String @id @default(cuid())
+  contentId   String @unique
+
+  metaTitle       String?
+  metaDescription String?
+  focusKeyword    String?
+  secondaryKeywords String?
+  canonicalUrl    String?
+  robots          String?
+  schemaJson      String?
+
+  ogTitle       String?
+  ogDescription String?
+  ogImageUrl    String?
+
+  readabilityScore   Int?
+  semanticScore      Int?
+  internalLinkScore  Int?
+  freshnessScore     Int?
+  overallScore       Int?
+
+  noIndex Boolean @default(false)
+
+  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+}
+
+model ContentBrief {
+  id        String @id @default(cuid())
+  contentId String @unique
+
+  keyword       String?
+  intent        String?
+  persona       String?
+  objective     String?
+  funnelStage   String?
+  competitors   String?
+  outline       String?
+  internalLinks String?
+  references    String?
+  toneOfVoice   String?
+  cta           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+}
+
+model ContentRevision {
+  id        String   @id @default(cuid())
+  contentId String
+  userId    String?
+
+  title   String
+  content String?
+  notes   String?
+  createdAt DateTime @default(now())
+
+  contentRef Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  user       User?   @relation(fields: [userId], references: [id])
+}
+
+model ContentAnalytics {
+  id        String @id @default(cuid())
+  contentId String @unique
+
+  views       Int @default(0)
+  sessions    Int @default(0)
+  avgTime     Int @default(0)
+  bounceRate  Float?
+  ctr         Float?
+  impressions Int @default(0)
+  clicks      Int @default(0)
+  position    Float?
+  lastSync    DateTime?
+
+  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+}
+
+model EditorialCalendar {
+  id        String @id @default(cuid())
+  contentId String @unique
+
+  plannedDate   DateTime?
+  scheduledDate DateTime?
+  priority      String?
+  campaign      String?
+  owner         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
 }
 
 model Media {
@@ -90,8 +304,10 @@ model Media {
   variants MediaVariant[]
   ai       MediaAI?
 
-  articles Article[] @relation("ArticleFeaturedImage")
+  featuredIn Content[]      @relation("ContentFeaturedImage")
+  contentLinks ContentMedia[]
 }
+
 model MediaFolder {
   id        String   @id @default(cuid())
   name      String
@@ -132,86 +348,37 @@ model MediaAI {
   media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
 }
 
-model Article {
-  id          String        @id @default(cuid())
-  title       String
-  slug        String        @unique
-  excerpt     String?
-  content     String
-  status      ArticleStatus @default(DRAFT)
-  readingTime Int?
-  canonicalUrl String?
+model AIJob {
+  id        String      @id @default(cuid())
+  contentId String?
+  type      String
+  status    AIJobStatus @default(QUEUED)
 
-  publishedAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  model        String?
+  prompt       String
+  response     String?
+  error        String?
+  tokensInput  Int?
+  tokensOutput Int?
+  cost         Float?
 
-  authorId String?
-  author   Author? @relation(fields: [authorId], references: [id])
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdAt  DateTime @default(now())
 
-  categoryId String?
-  category   Category? @relation(fields: [categoryId], references: [id])
-
-  createdById String?
-  createdBy   User? @relation(fields: [createdById], references: [id])
-
-  featuredImageId String?
-  featuredImage   Media? @relation("ArticleFeaturedImage", fields: [featuredImageId], references: [id])
-
-  tags      ArticleTag[]
-  seo       ArticleSEO?
-  revisions Revision[]
-}
-
-model ArticleTag {
-  articleId String
-  tagId     String
-
-  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
-  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
-
-  @@id([articleId, tagId])
-}
-
-model ArticleSEO {
-  id             String  @id @default(cuid())
-  articleId      String  @unique
-  metaTitle      String?
-  metaDescription String?
-  focusKeyword   String?
-  ogTitle        String?
-  ogDescription  String?
-  ogImageUrl     String?
-  noIndex        Boolean @default(false)
-
-  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
-}
-
-model Revision {
-  id        String   @id @default(cuid())
-  articleId String
-  userId    String?
-  title     String
-  content   String
-  createdAt DateTime @default(now())
-
-  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
-  user    User?    @relation(fields: [userId], references: [id])
+  content Content? @relation(fields: [contentId], references: [id], onDelete: SetNull)
 }
 
 model Redirect {
   id        String   @id @default(cuid())
-  fromPath  String   @unique
+  siteId    String?
+  fromPath  String
   toPath    String
   statusCode Int     @default(301)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-}
 
-model PromptLog {
-  id        String   @id @default(cuid())
-  prompt    String
-  response  String?
-  source    String?
-  createdAt DateTime @default(now())
+  site Site? @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, fromPath])
 }
